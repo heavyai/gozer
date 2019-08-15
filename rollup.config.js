@@ -22,7 +22,6 @@ export default {
       sourcemap: true
     }
   ],
-  external: [ 'fast-deep-equal' ],
   plugins: [
     external(),
     postcss({
