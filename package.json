@@ -24,7 +24,8 @@
   "peerDependencies": {
     "prop-types": "^15.5.4",
     "react": "^16.8.6",
-    "react-dom": "^16.8.6"
+    "react-dom": "^16.8.6",
+    "fast-deep-equal": "^2.0.1"
   },
   "devDependencies": {
     "@svgr/rollup": "^2.4.1",
@@ -53,12 +54,10 @@
     "rollup-plugin-node-resolve": "^3.3.0",
     "rollup-plugin-peer-deps-external": "^2.2.0",
     "rollup-plugin-postcss": "^1.6.2",
-    "rollup-plugin-url": "^1.4.0"
+    "rollup-plugin-url": "^1.4.0",
+    "fast-deep-equal": "^2.0.1"
   },
   "files": [
     "dist"
-  ],
-  "dependencies": {
-    "fast-deep-equal": "^2.0.1"
-  }
+  ]
 }
