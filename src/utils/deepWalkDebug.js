@@ -30,7 +30,7 @@ export function deepPathWalk(obj, key = [], seen = new Set()) {
 
   output.push(refRow)
 
-  if (seen.has(obj)) {
+  if ( (Array.isArray(obj) || typeof obj === "object") && seen.has(obj)) {
     // already seen? bomb out early.
     return output
   }
