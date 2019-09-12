@@ -706,7 +706,7 @@ function deepPathWalk(obj) {
 
   output.push(refRow);
 
-  if (seen.has(obj)) {
+  if ((Array.isArray(obj) || (typeof obj === "undefined" ? "undefined" : _typeof(obj)) === "object") && seen.has(obj)) {
     // already seen? bomb out early.
     return output;
   }
