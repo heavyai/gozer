@@ -411,7 +411,7 @@ function outputDeepDiff(res) {
     console.log("Objects are the same or differences are filtered out");
   } else {
     res.forEach(function (row) {
-      var key = row.key.join("/") || "/";
+      var key = row.key.length ? row.key.join("/") || "/" : "(root object)";
       if (key.match(filter)) {
         // tslint:disable""""
         /* eslint-disable-next-line no-console */
@@ -674,7 +674,7 @@ var Zuul = (function (Component, givenOptions) {
 /*
   This is a companion to deepDiffDebug. That utility is mostly used by Zuul.
 
-  This one is mostly used by vinceclortho.
+  This one is mostly used by vinzclortho.
 
   deepPathWalk will take a single object as an input and walk through it, producing
   a list of key/value pairs in a similar style to deepDiffDebug.
@@ -685,17 +685,100 @@ var Zuul = (function (Component, givenOptions) {
 
   res is:
   [
-    { key : "a", value : 1 },
-    { key : "b", value : 2 },
-    { key : "c", value : { d : 3 } },
-    { key : "c/d", value : 3 }
+    { key : ["a"], value : 1 },
+    { key : ["b"], value : 2 },
+    { key : ["c"], value : { d : 3 } },
+    { key : ["c", "d"], value : 3 }
   ]
+
+  deepPathWalk accepts an optional second boolean parameter - if true, it'll return
+  an object of { deepPath, duplicates }. The deepPath key is the structure defined
+  above. "duplicates" is a map which contains the data defined below. It's convoluted,
+  so only use if if you know you need it.
+
+  You probably want to run the results through collapseDeepWalk first.
 
 */
 
 function deepPathWalk(obj) {
-  var key = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : [];
-  var seen = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : new Set();
+  var withDuplicates = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : false;
+
+
+  var duplicates = new Map();
+
+  var deepPath = internalDeepPathWalk(obj, { duplicates: duplicates });
+
+  /* okay, this is a little convoluted.
+     The reason that we have deepPathWalk and internalDeepPathWalk work is to handle the
+     case of multiple references to the same object/array. internalDeepPathWalk will find
+     the deepPathWalk + a list of duplicated arrays/values. The structure of duplicates is
+     defined down below in a comment.
+      Here, we iterate over the dupes. It'll be a structure that looks like this:
+      duplicates[ { key : 'a', suboutput } ] = [ ['b'] ]
+      This tells us that we need to look through the suboutput and add a new entry to the deepPath
+     output foreach suboutput row. BUT we want to swap the start of the key from 'a' -> 'b'
+      So if suboutput contains { key : ['a', 'x', 0, 7, 'n'] : "foo" }
+     then we want to add a row containing : { key : ['b', 'x', 0, 7, 'n'] : "foo" }
+      Since we've swapped the original key ('a') for the duplicated reference ('b')
+  */
+
+  var _loop = function _loop(duplicateKeys, originalKey, subOutput) {
+    duplicateKeys.forEach(function (dupeKey) {
+      subOutput.forEach(function (subRow) {
+        return deepPath.push({
+          key: [].concat(toConsumableArray(dupeKey), toConsumableArray(subRow.key.slice(originalKey.length))),
+          value: subRow.value
+        });
+      });
+    });
+  };
+
+  var _iteratorNormalCompletion = true;
+  var _didIteratorError = false;
+  var _iteratorError = undefined;
+
+  try {
+    for (var _iterator = duplicates.entries()[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
+      var _ref = _step.value;
+
+      var _ref2 = slicedToArray(_ref, 2);
+
+      var _ref2$ = _ref2[0];
+      var originalKey = _ref2$.key;
+      var subOutput = _ref2$.subOutput;
+      var duplicateKeys = _ref2[1];
+
+      _loop(duplicateKeys, originalKey, subOutput);
+    }
+  } catch (err) {
+    _didIteratorError = true;
+    _iteratorError = err;
+  } finally {
+    try {
+      if (!_iteratorNormalCompletion && _iterator.return) {
+        _iterator.return();
+      }
+    } finally {
+      if (_didIteratorError) {
+        throw _iteratorError;
+      }
+    }
+  }
+
+  deepPath.forEach(function (row) {
+    var rowKey = row.key.join("/");
+  });
+
+  return withDuplicates ? { deepPath: deepPath, duplicates: duplicates } : deepPath;
+}
+
+function internalDeepPathWalk(obj, _ref3) {
+  var _ref3$key = _ref3.key,
+      key = _ref3$key === undefined ? [] : _ref3$key,
+      _ref3$seen = _ref3.seen,
+      seen = _ref3$seen === undefined ? new Map() : _ref3$seen,
+      duplicates = _ref3.duplicates;
+
 
   var output = [];
 
@@ -706,25 +789,43 @@ function deepPathWalk(obj) {
 
   output.push(refRow);
 
-  if ((Array.isArray(obj) || (typeof obj === "undefined" ? "undefined" : _typeof(obj)) === "object") && seen.has(obj)) {
-    // already seen? bomb out early.
+  /* okay, this gets a little convoluted
+     When we encounter an array or an object, we add an entry to our seen map.
+     That maps from the actual array/object ref to a structure with the original key
+     AND the deep walk results for that object.
+      Later, if we see that object again, it'll exist in our seen map. If that's the case,
+     then we want to add on to our duplicates map. That map is the value of the seen map
+     { key, subOutput} -> [ array of duplicate keys ]
+      Let's say that objA exists at key ['a']. It'll get tossed into seen as:
+     seen[objA] = { key : 'a', suboutput : [ /* results of deepWalk of objA * /] }
+      Then we later encounter objA at key ['b'] That'll fall into this check here and
+     add onto the duplicates Map, which will look like this:
+      duplicates[ { key : 'a', suboutput } ] = [ ['b'] ]
+   */
+  if (seen.has(obj)) {
+    var originalKey = seen.get(obj);
+    if (duplicates.get(originalKey) === undefined) {
+      duplicates.set(originalKey, []);
+    }
+
+    duplicates.get(originalKey).push(key);
     return output;
   }
 
-  seen.add(obj);
-
   if (obj === null) ; else if (Array.isArray(obj)) {
+    var subOutput = [];
+    seen.set(obj, { key: key, subOutput: subOutput });
     obj.forEach(function (e, i) {
-      var subOutput = deepPathWalk(e, [].concat(toConsumableArray(key), [i]), seen);
-      output.push.apply(output, toConsumableArray(subOutput));
+      subOutput.push.apply(subOutput, toConsumableArray(internalDeepPathWalk(e, { key: [].concat(toConsumableArray(key), [i]), seen: seen, duplicates: duplicates })));
     });
+    output.push.apply(output, subOutput);
   } else if ((typeof obj === "undefined" ? "undefined" : _typeof(obj)) === "object") {
+    var _subOutput = [];
+    seen.set(obj, { key: key, subOutput: _subOutput });
     Object.keys(obj).sort().forEach(function (objKey) {
-      var subOutput = deepPathWalk(obj[objKey], [].concat(toConsumableArray(key), [objKey]), seen);
-      output.push.apply(output, toConsumableArray(subOutput));
+      _subOutput.push.apply(_subOutput, toConsumableArray(internalDeepPathWalk(obj[objKey], { key: [].concat(toConsumableArray(key), [objKey]), seen: seen, duplicates: duplicates })));
     });
-  } else {
-    output.push(refRow);
+    output.push.apply(output, _subOutput);
   }
 
   return output;
@@ -780,13 +881,13 @@ function pickScalars(obj) {
 */
 
 function outputDeepWalk(res) {
-  var _ref = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {},
-      _ref$filter = _ref.filter,
-      filter = _ref$filter === undefined ? /.*/ : _ref$filter,
-      _ref$withValues = _ref.withValues,
-      withValues = _ref$withValues === undefined ? false : _ref$withValues,
-      _ref$groupName = _ref.groupName,
-      groupName = _ref$groupName === undefined ? "Deep Walk Output" : _ref$groupName;
+  var _ref4 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {},
+      _ref4$filter = _ref4.filter,
+      filter = _ref4$filter === undefined ? /.*/ : _ref4$filter,
+      _ref4$withValues = _ref4.withValues,
+      withValues = _ref4$withValues === undefined ? false : _ref4$withValues,
+      _ref4$groupName = _ref4.groupName,
+      groupName = _ref4$groupName === undefined ? "Deep Walk Output" : _ref4$groupName;
 
   /* eslint-disable-next-line no-console */
   console.groupCollapsed(groupName);
@@ -830,6 +931,7 @@ function outputDeepWalk(res) {
 */
 
 var defaultOptions$2 = {
+  logDuplications: false,
   logMutations: true,
   logRepackaging: false,
   debugMutations: false,
@@ -858,7 +960,17 @@ var vinzclortho = (function (givenOptions) {
 
         // Now we do a deep walk of the new state after the action was fired. Same deal - we
         // get a listing of every object at every keypath, with the original object references.
-        var newState = collapseDeepWalk(filterDuplicates(deepPathWalk(store.getState())));
+        // we do this one in two steps because we also may want to log if an object occurs in the
+        // store more than one time.
+
+        var _deepPathWalk = deepPathWalk(store.getState(), "with duplicates"),
+            newDeepPath = _deepPathWalk.deepPath,
+            duplicates = _deepPathWalk.duplicates;
+
+        // Next we actually get the new state on the newDeepWalk we collected up above.
+
+
+        var newState = collapseDeepWalk(filterDuplicates(newDeepPath));
 
         // now, we have two objects so we can just do a standard deepDiffDebug on them to find
         // the differences.
@@ -931,6 +1043,46 @@ var vinzclortho = (function (givenOptions) {
           }
         });
 
+        // next, if we're logging duplications and we have any, we should spit them out:
+        if (options.logDuplications) {
+          var _iteratorNormalCompletion = true;
+          var _didIteratorError = false;
+          var _iteratorError = undefined;
+
+          try {
+            for (var _iterator = duplicates.entries()[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
+              var _console;
+
+              var _ref = _step.value;
+
+              var _ref2 = slicedToArray(_ref, 2);
+
+              var _ref2$ = _ref2[0];
+              var originalKey = _ref2$.key;
+              var subOutput = _ref2$.subOutput;
+              var duplicateKeys = _ref2[1];
+
+              var otherKeys = duplicateKeys.map(function (key) {
+                return key.join("/");
+              });
+              (_console = console).warn.apply(_console, ["VINZ CLORTHO HAS FOUND DUPLICATIONS AT @", originalKey.join("/")].concat(toConsumableArray(otherKeys), [subOutput]));
+            }
+          } catch (err) {
+            _didIteratorError = true;
+            _iteratorError = err;
+          } finally {
+            try {
+              if (!_iteratorNormalCompletion && _iterator.return) {
+                _iterator.return();
+              }
+            } finally {
+              if (_didIteratorError) {
+                throw _iteratorError;
+              }
+            }
+          }
+        }
+
         return result;
       };
     };
@@ -945,6 +1097,7 @@ exports.isEqual = isEqual;
 exports.filterRedundantRows = filterRedundantRows;
 exports.outputDeepDiff = outputDeepDiff;
 exports.deepPathWalk = deepPathWalk;
+exports.internalDeepPathWalk = internalDeepPathWalk;
 exports.collapseDeepWalk = collapseDeepWalk;
 exports.filterDuplicates = filterDuplicates;
 exports.pickScalars = pickScalars;
