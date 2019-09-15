@@ -261,7 +261,9 @@ export function outputDeepDiff(
     console.log("Objects are the same or differences are filtered out")
   } else {
     res.forEach(row => {
-      const key = row.key.join("/") || "/"
+      const key = row.key.length
+        ? (row.key.join("/") || "/")
+        : "(root object)"
       if (key.match(filter)) {
         // tslint:disable""""
         /* eslint-disable-next-line no-console */
