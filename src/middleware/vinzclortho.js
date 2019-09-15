@@ -34,6 +34,7 @@ import {
 } from "../utils/deepWalkDebug"
 
 const defaultOptions = {
+  logDuplications : false,
   logMutations: true,
   logRepackaging: false,
   debugMutations: false,
@@ -67,9 +68,12 @@ export default givenOptions => {
 
     // Now we do a deep walk of the new state after the action was fired. Same deal - we
     // get a listing of every object at every keypath, with the original object references.
-    const newState = collapseDeepWalk(
-      filterDuplicates(deepPathWalk(store.getState()))
-    )
+    // we do this one in two steps because we also may want to log if an object occurs in the
+    // store more than one time.
+    const { deepPath : newDeepPath, duplicates } = deepPathWalk(store.getState(), "with duplicates")
+
+    // Next we actually get the new state on the newDeepWalk we collected up above.
+    const newState = collapseDeepWalk( filterDuplicates(newDeepPath) )
 
     // now, we have two objects so we can just do a standard deepDiffDebug on them to find
     // the differences.
@@ -160,6 +164,19 @@ export default givenOptions => {
         }
       }
     })
+
+    // next, if we're logging duplications and we have any, we should spit them out:
+    if (options.logDuplications) {
+      for (const [{key : originalKey, subOutput}, duplicateKeys] of duplicates.entries()) {
+        const otherKeys = duplicateKeys.map( key => key.join("/"))
+        console.warn(
+          "VINZ CLORTHO HAS FOUND DUPLICATIONS AT @",
+          originalKey.join("/"),
+          ...otherKeys,
+          subOutput
+        )
+      }
+    }
 
     return result
   }
