@@ -60,6 +60,35 @@ var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol
   return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj;
 };
 
+var asyncToGenerator = function (fn) {
+  return function () {
+    var gen = fn.apply(this, arguments);
+    return new Promise(function (resolve, reject) {
+      function step(key, arg) {
+        try {
+          var info = gen[key](arg);
+          var value = info.value;
+        } catch (error) {
+          reject(error);
+          return;
+        }
+
+        if (info.done) {
+          resolve(value);
+        } else {
+          return Promise.resolve(value).then(function (value) {
+            step("next", value);
+          }, function (err) {
+            step("throw", err);
+          });
+        }
+      }
+
+      return step("next");
+    });
+  };
+};
+
 var _extends = Object.assign || function (target) {
   for (var i = 1; i < arguments.length; i++) {
     var source = arguments[i];
@@ -1082,5 +1111,433 @@ var vinzclortho = (function (givenOptions) {
   };
 });
 
-export { Zuul, vinzclortho, deepDiffDebug, diffsByTypes, isEqual, filterRedundantRows, outputDeepDiff, deepPathWalk, internalDeepPathWalk, collapseDeepWalk, filterDuplicates, pickScalars, outputDeepWalk, sanitize };
+var fetchIt = function () {
+  var _ref = asyncToGenerator( /*#__PURE__*/regeneratorRuntime.mark(function _callee2(file, line, column) {
+    var _this = this;
+
+    var mapFile, promise, pos;
+    return regeneratorRuntime.wrap(function _callee2$(_context2) {
+      while (1) {
+        switch (_context2.prev = _context2.next) {
+          case 0:
+            if (window.sourceMap) {
+              _context2.next = 2;
+              break;
+            }
+
+            throw new Error("Please install source-map and configure it before using traces");
+
+          case 2:
+            if (fetched.has(file)) {
+              _context2.next = 13;
+              break;
+            }
+
+            mapFile = file + ".map";
+
+            if (!promises.has(mapFile)) {
+              _context2.next = 9;
+              break;
+            }
+
+            _context2.next = 7;
+            return promises.get(mapFile);
+
+          case 7:
+            _context2.next = 13;
+            break;
+
+          case 9:
+            // eslint-disable-next-line no-async-promise-executor
+            promise = new Promise(function () {
+              var _ref2 = asyncToGenerator( /*#__PURE__*/regeneratorRuntime.mark(function _callee(resolve, reject) {
+                var res, mapJSON, consumer;
+                return regeneratorRuntime.wrap(function _callee$(_context) {
+                  while (1) {
+                    switch (_context.prev = _context.next) {
+                      case 0:
+                        _context.prev = 0;
+                        _context.next = 3;
+                        return fetch(mapFile);
+
+                      case 3:
+                        res = _context.sent;
+
+                        promises.delete(mapFile);
+
+                        _context.next = 7;
+                        return res.json();
+
+                      case 7:
+                        mapJSON = _context.sent;
+                        _context.next = 10;
+                        return new window.sourceMap.SourceMapConsumer(mapJSON);
+
+                      case 10:
+                        consumer = _context.sent;
+
+                        fetched.set(file, consumer);
+
+                        resolve();
+                        _context.next = 18;
+                        break;
+
+                      case 15:
+                        _context.prev = 15;
+                        _context.t0 = _context["catch"](0);
+
+                        reject(_context.t0);
+
+                      case 18:
+                      case "end":
+                        return _context.stop();
+                    }
+                  }
+                }, _callee, _this, [[0, 15]]);
+              }));
+
+              return function (_x4, _x5) {
+                return _ref2.apply(this, arguments);
+              };
+            }());
+
+
+            promises.set(mapFile, promise);
+            _context2.next = 13;
+            return promise;
+
+          case 13:
+            pos = fetched.get(file).originalPositionFor({ line: line, column: column });
+            return _context2.abrupt("return", pos);
+
+          case 15:
+          case "end":
+            return _context2.stop();
+        }
+      }
+    }, _callee2, this);
+  }));
+
+  return function fetchIt(_x, _x2, _x3) {
+    return _ref.apply(this, arguments);
+  };
+}();
+
+var getTrace = function () {
+  var _ref3 = asyncToGenerator( /*#__PURE__*/regeneratorRuntime.mark(function _callee3(e, label, logExternalTrace, slimeTraceCSS) {
+    var stack, trace, i, frame, func, file, position, externalCall;
+    return regeneratorRuntime.wrap(function _callee3$(_context3) {
+      while (1) {
+        switch (_context3.prev = _context3.next) {
+          case 0:
+            stack = e.stack;
+            trace = "";
+            i = 0;
+
+          case 3:
+            if (!(i < Math.min(40, stack.length))) {
+              _context3.next = 20;
+              break;
+            }
+
+            frame = stack[i];
+            func = frame.getFunctionName();
+            file = frame.getFileName();
+
+            if (!(file === null)) {
+              _context3.next = 9;
+              break;
+            }
+
+            return _context3.abrupt("break", 20);
+
+          case 9:
+            _context3.next = 11;
+            return fetchIt(file, frame.getLineNumber(), frame.getColumnNumber());
+
+          case 11:
+            position = _context3.sent;
+
+            if (!(position === null || position.source === null || position.source.match(/Slimer.js/) || position.source.match(/react-hot-loader/)
+            // tack into here the other paths you want to remove, or override it.
+            // position.source.match(/my-file-name.js/) ||
+            )) {
+              _context3.next = 14;
+              break;
+            }
+
+            return _context3.abrupt("continue", 17);
+
+          case 14:
+            externalCall = "[" + label + "] via " + func + " IN " + file + " (" + position.source + ", " + position.line + ")";
+
+            if (!seenCalls.has(externalCall)) {
+              seenCalls.add(externalCall);
+              // eslint-disable-next-line no-console
+              console.log("%cGetting slimed external trace :", slimeTraceCSS, externalCall, position.column);
+              // console.log(`${externalCall} (${position.column})`)
+            }
+
+            return _context3.abrupt("break", 20);
+
+          case 17:
+            i += 1;
+            _context3.next = 3;
+            break;
+
+          case 20:
+            return _context3.abrupt("return", trace);
+
+          case 21:
+          case "end":
+            return _context3.stop();
+        }
+      }
+    }, _callee3, this);
+  }));
+
+  return function getTrace(_x6, _x7, _x8, _x9) {
+    return _ref3.apply(this, arguments);
+  };
+}();
+
+var fetched = new Map();
+var promises = new Map();
+
+
+var seenCalls = new Set();
+
+function Slimer(wrapped) {
+  var _this2 = this;
+
+  var config = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+  var _config$label = config.label,
+      label = _config$label === undefined ? "object" : _config$label,
+      _config$slimeUndefine = config.slimeUndefined,
+      slimeUndefined = _config$slimeUndefine === undefined ? false : _config$slimeUndefine,
+      _config$logSet = config.logSet,
+      logSet = _config$logSet === undefined ? false : _config$logSet,
+      _config$logGet = config.logGet,
+      logGet = _config$logGet === undefined ? false : _config$logGet,
+      _config$logFunction = config.logFunction,
+      logFunction = _config$logFunction === undefined ? false : _config$logFunction,
+      _config$logSymbols = config.logSymbols,
+      logSymbols = _config$logSymbols === undefined ? false : _config$logSymbols,
+      _config$logExternalTr = config.logExternalTrace,
+      logExternalTrace = _config$logExternalTr === undefined ? false : _config$logExternalTr,
+      _config$logPromises = config.logPromises,
+      logPromises = _config$logPromises === undefined ? false : _config$logPromises,
+      _config$slimeSetCSS = config.slimeSetCSS,
+      slimeSetCSS = _config$slimeSetCSS === undefined ? "background-color:#00FF00" : _config$slimeSetCSS,
+      _config$slimeGetCSS = config.slimeGetCSS,
+      slimeGetCSS = _config$slimeGetCSS === undefined ? "background-color:#CCFFCC" : _config$slimeGetCSS,
+      _config$slimeFunction = config.slimeFunctionCSS,
+      slimeFunctionCSS = _config$slimeFunction === undefined ? "background-color:#66FF66" : _config$slimeFunction,
+      _config$slimeTraceCSS = config.slimeTraceCSS,
+      slimeTraceCSS = _config$slimeTraceCSS === undefined ? "background-color:#BBFF22" : _config$slimeTraceCSS,
+      _config$slimePromiseC = config.slimePromiseCSS,
+      slimePromiseCSS = _config$slimePromiseC === undefined ? "background-color:#22FFBB" : _config$slimePromiseC,
+      _config$hideFunctionD = config.hideFunctionDefs,
+      hideFunctionDefs = _config$hideFunctionD === undefined ? true : _config$hideFunctionD,
+      _config$labelBreaks = config.labelBreaks,
+      labelBreaks = _config$labelBreaks === undefined ? new Set() : _config$labelBreaks,
+      _config$enabled = config.enabled,
+      enabled = _config$enabled === undefined ? false : _config$enabled;
+
+
+  if (!enabled) {
+    return wrapped;
+  }
+
+  if (logExternalTrace === true) {
+    Error.prepareStackTrace = function (e, s) {
+      return s;
+    };
+  }
+
+  if ((typeof wrapped === "undefined" ? "undefined" : _typeof(wrapped)) !== "object" && typeof wrapped !== "function" || wrapped === null || wrapped === undefined) {
+    return wrapped;
+  }
+  // promises are a super special case. We want to wrap the result of the promise.
+  if (Promise.resolve(wrapped) === wrapped) {
+    // eslint-disable-next-line no-async-promise-executor
+    return new Promise(function () {
+      var _ref4 = asyncToGenerator( /*#__PURE__*/regeneratorRuntime.mark(function _callee4(resolve, reject) {
+        var result;
+        return regeneratorRuntime.wrap(function _callee4$(_context4) {
+          while (1) {
+            switch (_context4.prev = _context4.next) {
+              case 0:
+                _context4.prev = 0;
+                _context4.next = 3;
+                return wrapped;
+
+              case 3:
+                result = _context4.sent;
+
+                if (logPromises) {
+                  // eslint-disable-next-line no-console
+                  console.log("%cResolved slimed promise: ", slimePromiseCSS, label, result);
+                }
+                resolve(result);
+                _context4.next = 12;
+                break;
+
+              case 8:
+                _context4.prev = 8;
+                _context4.t0 = _context4["catch"](0);
+
+                if (logPromises) {
+                  // eslint-disable-next-line no-console
+                  console.log("%cRejected slimed promise: ", slimePromiseCSS, label, _context4.t0);
+                }
+                reject(_context4.t0);
+
+              case 12:
+              case "end":
+                return _context4.stop();
+            }
+          }
+        }, _callee4, _this2, [[0, 8]]);
+      }));
+
+      return function (_x11, _x12) {
+        return _ref4.apply(this, arguments);
+      };
+    }());
+  }
+
+  return new Proxy(wrapped, {
+    original: function original() {
+      return wrapped;
+    },
+    construct: function construct(target, args) {
+      return new (Function.prototype.bind.apply(target, [null].concat(toConsumableArray(args))))();
+    },
+    set: function set$$1(obj, prop, value) {
+      if (logSet) {
+        // eslint-disable-next-line no-console
+        console.log("%cSetting slimed property ", slimeSetCSS, label, prop, value);
+      }
+      if (labelBreaks.has("set/" + label)) {
+        // eslint-disable-next-line no-debugger
+        debugger;
+      }
+      return Reflect.set(wrapped, prop, value);
+    },
+
+    get: function get$$1(obj, prop) {
+      if (prop === "constructor" || prop === "prototype" || prop === "inspect" || prop === "call" || prop === "@@toStringTag") {
+        return wrapped[prop];
+      }
+
+      if (logGet) {
+        // eslint-disable-next-line no-console
+        console.log("%cGetting slimed property : ", slimeGetCSS, label, prop, typeof wrapped[prop] === "function" && hideFunctionDefs ? "function" : wrapped[prop]);
+        // const stackTrace = Error.captureStackTrace(new Error())
+        // const stackTrace = new Error().stack
+        // console.log("STACK TRACE : ", stackTrace)
+        // console.trace()
+      }
+
+      if (logExternalTrace && prop !== "then" && prop !== "catch") {
+        try {
+          throw new Error("Slimer slimed you!");
+        } catch (e) {
+          getTrace(e, prop, logExternalTrace, slimeTraceCSS); // `[${prop}]`)
+        }
+      }
+
+      if (labelBreaks.has("get/" + label)) {
+        // eslint-disable-next-line no-debugger
+        debugger;
+      }
+
+      if (typeof prop === "string") {
+        var sublabel = [label, prop].join("/");
+        // objects should be re-slimed
+        if (_typeof(wrapped[prop]) === "object") {
+          return wrapped[prop] === null ? null : Slimer(wrapped[prop], _extends({}, config, { label: sublabel }));
+        } else if (typeof wrapped[prop] === "function") {
+          // likewise, functions should also be reslimed
+          /* if (logFunction) {
+          // eslint-disable-next-line no-console
+          console.log("%cCalling slimed function : ", slimeCSS, prop, wrapped[prop], typeof wrapped[prop])
+          } */
+
+          var boundFunc = wrapped[prop].bind(wrapped);
+          return function () {
+            for (var _len = arguments.length, args = Array(_len), _key = 0; _key < _len; _key++) {
+              args[_key] = arguments[_key];
+            }
+
+            var retVal = boundFunc.apply(undefined, args);
+            if (logFunction) {
+              // eslint-disable-next-line no-console
+              console.log("%cCalling slimed function : ", slimeFunctionCSS, label, prop, args, retVal);
+            }
+
+            if (logExternalTrace && prop !== "then" && prop !== "catch") {
+              try {
+                throw new Error("Slimer slimed you!");
+              } catch (e) {
+                getTrace(e, prop, logExternalTrace, slimeTraceCSS); // `${prop}()`)
+              }
+            }
+
+            if (labelBreaks.has("function/" + label)) {
+              // eslint-disable-next-line no-debugger
+              debugger;
+            }
+
+            return Slimer(retVal, _extends({}, config, { label: sublabel + "[=>]" }));
+          };
+        } else {
+          // otherwise, it's a literal value. No sliming necessary. UNLESS we're sliming undefined attributes.
+          if (prop === "prototype") {
+            return wrapped[prop];
+          }
+          return wrapped[prop] === undefined && slimeUndefined ? Slimer({}, _extends({}, config, { label: sublabel })) : wrapped[prop];
+        }
+      } else {
+        // javascript is freaking bananas. You can call get with a symbol, not just a string. This is for some sort
+        // of bullshit attempt at encapsulated methods. But we need to handle it!
+        if (logSymbols) {
+          // eslint-disable-next-line no-console
+          console.log("%caccessing symbol on " + label + " : ", slimeGetCSS, prop, wrapped[prop]);
+        }
+        if (labelBreaks.has("symbol/" + label)) {
+          // eslint-disable-next-line no-debugger
+          debugger;
+        }
+
+        return wrapped[prop];
+      }
+    },
+    apply: function apply() {
+      for (var _len2 = arguments.length, args = Array(_len2), _key2 = 0; _key2 < _len2; _key2++) {
+        args[_key2] = arguments[_key2];
+      }
+
+      // Fun. You'll note that anything slimed is actually wrapped into a FUNCTION, NOT AN OBJECT.
+      // This is so we can do this. If we're sliming undefined values, we can't be positive that we're gonna get back
+      // something that'd be used as an object or something that'd be used as a function. So we actually shove whatever
+      // we're sliming into a function call that returns the wrapped object. This almost very nearly works in all cases.
+      //
+      if (logFunction) {
+        var _console;
+
+        // eslint-disable-next-line no-console
+        (_console = console).log.apply(_console, ["%csliming function with args : ", slimeSetCSS].concat(args));
+      }
+      if (labelBreaks.has("function/" + label)) {
+        // eslint-disable-next-line no-debugger
+        debugger;
+      }
+      return Reflect.apply.apply(Reflect, args);
+    }
+  });
+}
+
+export { Slimer, Zuul, vinzclortho, deepDiffDebug, diffsByTypes, isEqual, filterRedundantRows, outputDeepDiff, deepPathWalk, internalDeepPathWalk, collapseDeepWalk, filterDuplicates, pickScalars, outputDeepWalk, sanitize };
 //# sourceMappingURL=index.es.js.map

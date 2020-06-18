@@ -1,8 +1,9 @@
-import Zuul from "./components/Zuul"
-import vinzclortho from "./middleware/vinzclortho"
+import Zuul from "./components/Zuul";
+import vinzclortho from "./middleware/vinzclortho";
+import Slimer from "./utils/Slimer";
 
-export * from "./utils/deepDiffDebug"
-export * from "./utils/deepWalkDebug"
-export * from "./utils/sanitizeObject"
+export * from "./utils/deepDiffDebug";
+export * from "./utils/deepWalkDebug";
+export * from "./utils/sanitizeObject";
 
-export { Zuul, vinzclortho }
+export { Slimer, Zuul, vinzclortho };
