@@ -4,7 +4,7 @@
   "description": "Arcane tools for difficult bugs",
   "author": "thomasoniii",
   "license": "MIT",
-  "repository": "omnisci/gozer",
+  "repository": "heavyai/gozer",
   "main": "dist/index.js",
   "module": "dist/index.es.js",
   "jsnext:main": "dist/index.es.js",
